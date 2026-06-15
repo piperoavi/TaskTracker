@@ -13,14 +13,19 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 465
-    username: piperoavi@gmail.com        # ← replace with your Gmail
-    password: ""           # ← replace with Gmail App Password
+    username: @gmail.com        # ← your Gmail
+    password: ""    # ← 16-char App Password in quotes
     properties:
       mail:
         smtp:
           auth: true
-          starttls:
+          ssl:
             enable: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+        starttls:
+          enable: false
 
   h2:
     console:
@@ -38,8 +43,6 @@ spring:
   flyway:
     enabled: true
 
-  # ── This is the only NEW line you need ──
-  # Tells Spring Boot to run data.sql on every startup (works with H2)
   sql:
     init:
       mode: always
