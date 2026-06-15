@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Task Tracker</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h1>Task Tracker</h1>
+
+<section>
+    <h2>Login</h2>
+    <input id="authUsername" placeholder="Username" value="admin">
+    <input id="authPassword" placeholder="Password" type="password" value="admin123">
+</section>
+
+<section>
+    <h2>Create User</h2>
+    <input id="username" placeholder="Username">
+    <input id="email" placeholder="Email">
+    <input id="password" placeholder="Password" type="password">
+    <button onclick="createUser()">Create User</button>
+</section>
+
+<section>
+    <h2>Create Project</h2>
+    <input id="projectName" placeholder="Project name">
+    <input id="projectDescription" placeholder="Description">
+    <input id="ownerId" placeholder="Owner ID">
+    <button onclick="createProject()">Create Project</button>
+</section>
+
+<section>
+    <h2>Create Task</h2>
+    <input id="taskProjectId" placeholder="Project ID">
+    <input id="taskTitle" placeholder="Task title">
+    <input id="taskDescription" placeholder="Description">
+    <select id="taskStatus">
+        <option value="TODO">TODO</option>
+        <option value="IN_PROGRESS">IN_PROGRESS</option>
+        <option value="COMPLETED">COMPLETED</option>
+    </select>
+    <select id="taskPriority">
+        <option value="LOW">LOW</option>
+        <option value="MEDIUM">MEDIUM</option>
+        <option value="HIGH">HIGH</option>
+    </select>
+    <input id="taskDueDate" type="date">
+    <input id="assigneeId" placeholder="Assignee ID">
+    <button onclick="createTask()">Create Task</button>
+</section>
+
+<section>
+    <h2>Lists</h2>
+    <button onclick="loadUsers()">Load Users</button>
+    <button onclick="loadProjects()">Load Projects</button>
+    <button onclick="loadTasksDueToday()">Tasks Due Today</button>
+
+    <input id="filterProjectId" placeholder="Project ID">
+    <select id="filterStatus">
+        <option value="">All</option>
+        <option value="TODO">TODO</option>
+        <option value="IN_PROGRESS">IN_PROGRESS</option>
+        <option value="COMPLETED">COMPLETED</option>
+    </select>
+    <button onclick="loadProjectTasks()">Load Project Tasks</button>
+</section>
+
+<section>
+    <h2>Output</h2>
+    <pre id="output"></pre>
+</section>
+
+<script src="app.js"></script>
+</body>
+</html>
