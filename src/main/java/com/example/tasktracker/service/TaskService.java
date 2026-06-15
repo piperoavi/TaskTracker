@@ -16,7 +16,6 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
-import com.example.tasktracker.service.EmailService;
 
 import java.time.LocalDateTime;
 import java.util.List;
@@ -52,11 +51,12 @@ public class TaskService {
 
         logActivity(savedTask, "TASK_CREATED", "Task was created");
 
+        // ← FIXED: null-safe due date, wrapped in try/catch
         try {
             emailService.sendTaskAssignedEmail(
                     assignee.getEmail(),
                     savedTask.getTitle(),
-                    savedTask.getDueDate().toString()
+                    savedTask.getDueDate() != null ? savedTask.getDueDate().toString() : null
             );
         } catch (Exception e) {
             System.out.println("Email could not be sent: " + e.getMessage());

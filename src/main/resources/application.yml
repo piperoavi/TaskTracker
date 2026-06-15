@@ -1,6 +1,6 @@
 spring:
   datasource:
-    url: jdbc:h2:mem:tasktrackerdb
+    url: jdbc:h2:mem:tasktrackerdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
     username: sa
     password:
     driver-class-name: org.h2.Driver
@@ -11,16 +11,16 @@ spring:
       password: admin123
 
   mail:
-      host: smtp.gmail.com
-      port: 587
-      username: your_email@gmail.com
-      password: your_app_password
-      properties:
-        mail:
-          smtp:
-            auth: true
-            starttls:
-              enable: true
+    host: smtp.gmail.com
+    port: 465
+    username: piperoavi@gmail.com        # ← replace with your Gmail
+    password: ""           # ← replace with Gmail App Password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
 
   h2:
     console:
@@ -37,6 +37,12 @@ spring:
 
   flyway:
     enabled: true
+
+  # ── This is the only NEW line you need ──
+  # Tells Spring Boot to run data.sql on every startup (works with H2)
+  sql:
+    init:
+      mode: always
 
 server:
   port: 8080
