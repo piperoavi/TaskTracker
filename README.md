@@ -115,8 +115,8 @@ GET /api/v1/tasks/{taskId}/activities
 Example Request Bodies
 Create User
 {
-  "username": "ergis",
-  "email": "ergis@test.com",
+  "username": "alice",
+  "email": "alice@exemple.com",
   "password": "password123"
 }
 Create Project
@@ -176,6 +176,7 @@ User 1 --- many Project
 User 1 --- many Task
 Project 1 --- many Task
 Task 1 --- many TaskActivity
+
 Testing
 
 Implemented tests:
@@ -210,8 +211,3 @@ H2 in-memory database is used for development and testing.
 Passwords are hidden from API responses using DTOs.
 Email notification logic is implemented, but real SMTP credentials must be configured for actual email sending.
 Basic HTML/CSS/JavaScript frontend is enough for the assignment requirements.
-
-Create a file named:
-
-```text
-README.md
