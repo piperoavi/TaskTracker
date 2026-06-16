@@ -17,6 +17,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -34,15 +35,19 @@ public class TaskService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
-        // ── OWNERSHIP CHECK ──────────────────────────────────────────
-        // Only the project owner can create tasks inside the project
+        // Only the project owner can create tasks
         if (!project.getOwner().getId().equals(request.getRequesterId())) {
             throw new RuntimeException(
-                    "You are not the owner of project '" + project.getName() +
-                            "'. Only the project owner can create tasks."
+                    "Permission denied. Only the owner of project '" + project.getName() + "' can create tasks."
             );
         }
-        // ─────────────────────────────────────────────────────────────
+
+        // Due date cannot be in the past
+        if (request.getDueDate() != null && request.getDueDate().isBefore(LocalDate.now())) {
+            throw new RuntimeException(
+                    "Due date cannot be in the past. Please select today or a future date."
+            );
+        }
 
         User assignee = userRepository.findById(request.getAssigneeId())
                 .orElseThrow(() -> new RuntimeException("Assignee not found"));
@@ -59,7 +64,7 @@ public class TaskService {
 
         Task savedTask = taskRepository.save(task);
 
-        logActivity(savedTask, "TASK_CREATED", "Task was created");
+        logActivity(savedTask, "TASK_CREATED", "Task \"" + savedTask.getTitle() + "\" created and assigned to " + assignee.getUsername() + ".");
 
         try {
             emailService.sendTaskAssignedEmail(
@@ -88,10 +93,9 @@ public class TaskService {
     public TaskResponse updateTask(Long id, TaskRequest request) {
         Task task = findTaskEntityById(id);
 
-        // ── PERMISSION CHECK ─────────────────────────────────────────
-        // Only the project owner or the task assignee can update a task
-        Long ownerId    = task.getProject().getOwner().getId();
-        Long assigneeId = task.getAssignee() != null ? task.getAssignee().getId() : null;
+        // ── PERMISSION CHECK ──────────────────────────────────────────
+        Long ownerId     = task.getProject().getOwner().getId();
+        Long assigneeId  = task.getAssignee() != null ? task.getAssignee().getId() : null;
         Long requesterId = request.getRequesterId();
 
         boolean isOwner    = ownerId.equals(requesterId);
@@ -104,25 +108,80 @@ public class TaskService {
         }
         // ─────────────────────────────────────────────────────────────
 
+        // ── DUE DATE VALIDATION — no past dates ───────────────────────
+        if (request.getDueDate() != null && request.getDueDate().isBefore(LocalDate.now())) {
+            throw new RuntimeException(
+                    "Due date cannot be in the past. Please select today or a future date."
+            );
+        }
+        // ─────────────────────────────────────────────────────────────
+
         User assignee = userRepository.findById(request.getAssigneeId())
                 .orElseThrow(() -> new RuntimeException("Assignee not found"));
 
-        task.setTitle(request.getTitle());
-        task.setDescription(request.getDescription());
+        // ── ROLE-BASED EDIT + DETAILED CHANGE LOG ─────────────────────
+        StringBuilder changes = new StringBuilder();
+
+        if (isOwner) {
+            // Owner can change everything
+            if (!task.getTitle().equals(request.getTitle()))
+                changes.append("Title changed to \"").append(request.getTitle()).append("\". ");
+
+            if (task.getDescription() == null
+                    ? request.getDescription() != null
+                    : !task.getDescription().equals(request.getDescription()))
+                changes.append("Description updated. ");
+
+            if (!task.getStatus().equals(request.getStatus()))
+                changes.append("Status changed from ").append(task.getStatus())
+                        .append(" to ").append(request.getStatus()).append(". ");
+
+            if (!task.getPriority().equals(request.getPriority()))
+                changes.append("Priority changed from ").append(task.getPriority())
+                        .append(" to ").append(request.getPriority()).append(". ");
+
+            if (!task.getAssignee().getId().equals(request.getAssigneeId()))
+                changes.append("Assignee changed to ").append(assignee.getUsername()).append(". ");
+
+            if (task.getDueDate() == null && request.getDueDate() != null)
+                changes.append("Due date set to ").append(request.getDueDate()).append(". ");
+            else if (task.getDueDate() != null && request.getDueDate() == null)
+                changes.append("Due date removed. ");
+            else if (task.getDueDate() != null && !task.getDueDate().equals(request.getDueDate()))
+                changes.append("Due date changed to ").append(request.getDueDate()).append(". ");
+
+            // Apply all changes for owner
+            task.setTitle(request.getTitle());
+            task.setDescription(request.getDescription());
+            task.setPriority(request.getPriority());
+            task.setDueDate(request.getDueDate());
+            task.setAssignee(assignee);
+
+        } else {
+            // Assignee (non-owner) can ONLY change status
+            if (!task.getStatus().equals(request.getStatus()))
+                changes.append("Status changed from ").append(task.getStatus())
+                        .append(" to ").append(request.getStatus()).append(". ");
+            else
+                changes.append("No changes made.");
+        }
+
+        // Status change is always allowed for both owner and assignee
         task.setStatus(request.getStatus());
-        task.setPriority(request.getPriority());
-        task.setDueDate(request.getDueDate());
-        task.setAssignee(assignee);
+
+        String logDescription = changes.toString().trim().isEmpty()
+                ? "No changes made."
+                : changes.toString().trim();
+        // ─────────────────────────────────────────────────────────────
 
         Task updatedTask = taskRepository.save(task);
-        logActivity(updatedTask, "TASK_UPDATED", "Task was updated");
+        logActivity(updatedTask, "TASK_UPDATED", logDescription);
         return toTaskResponse(updatedTask);
     }
 
     public void deleteTask(Long id, Long requesterId) {
         Task task = findTaskEntityById(id);
 
-        // ── PERMISSION CHECK ─────────────────────────────────────────
         // Only the project owner can delete a task
         Long ownerId = task.getProject().getOwner().getId();
         if (!ownerId.equals(requesterId)) {
@@ -130,10 +189,7 @@ public class TaskService {
                     "Permission denied. Only the project owner can delete tasks."
             );
         }
-        // ─────────────────────────────────────────────────────────────
 
-        // Log activity BEFORE deleting the task activities first,
-        // then delete the task (avoids TransientObjectException)
         taskActivityRepository.deleteByTaskId(id);
         taskRepository.delete(task);
     }

@@ -284,7 +284,7 @@
                 <select id="nt-priority"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select>
             </div>
         </div>
-        <div class="field"><label>Due Date</label><input type="date" id="nt-due"/></div>
+        <div class="field"><label>Due Date</label><input type="date" id="nt-due" min=""/></div>
         <div class="field"><label>Assign To *</label><select id="nt-assignee"><option value="">Select a person…</option></select></div>
         <div class="modal-ftr">
             <button class="btn-ghost" onclick="closeModal('modal-task')">Cancel</button>
@@ -298,6 +298,7 @@
     <div class="modal">
         <div class="modal-hdr"><h3>Edit Task</h3><button class="modal-x" onclick="closeModal('modal-edit')">✕</button></div>
         <input type="hidden" id="et-id"/>
+        <div id="et-role-notice" class="role-notice" style="display:none">🔒 You are the assignee — you can only change the status of this task.</div>
         <div class="field"><label>Title *</label><input type="text" id="et-title"/></div>
         <div class="field"><label>Description</label><textarea id="et-desc" rows="2"></textarea></div>
         <div class="field-row">
@@ -308,7 +309,7 @@
                 <select id="et-priority"><option value="LOW">Low</option><option value="MEDIUM">Medium</option><option value="HIGH">High</option></select>
             </div>
         </div>
-        <div class="field"><label>Due Date</label><input type="date" id="et-due"/></div>
+        <div class="field"><label>Due Date</label><input type="date" id="et-due" min=""/></div>
         <div class="field"><label>Assign To *</label><select id="et-assignee"><option value="">Select…</option></select></div>
         <div class="modal-ftr">
             <button class="btn-ghost" onclick="closeModal('modal-edit')">Cancel</button>

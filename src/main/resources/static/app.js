@@ -357,24 +357,41 @@ async function createTask() {
 }
 
 function openEdit(t) {
-    document.getElementById('et-id').value    = t.id;
-    document.getElementById('et-title').value = t.title;
-    document.getElementById('et-desc').value  = t.description || '';
+    document.getElementById('et-id').value       = t.id;
+    document.getElementById('et-title').value    = t.title;
+    document.getElementById('et-desc').value     = t.description || '';
     document.getElementById('et-status').value   = t.status;
     document.getElementById('et-priority').value = t.priority;
-    document.getElementById('et-due').value   = t.dueDate || '';
+    document.getElementById('et-due').value      = t.dueDate || '';
 
     const sel = document.getElementById('et-assignee');
     sel.innerHTML = '<option value="">Select…</option>' +
         allUsers.map(u => `<option value="${u.id}" ${u.id===t.assigneeId?'selected':''}>${esc(u.username)}</option>`).join('');
 
-    // Only the project owner can delete — show/hide Delete button accordingly
+    // Check role
     const proj = allProjects.find(p => p.id === t.projectId);
     const iAmOwner = proj && (
         proj.ownerUsername === currentUser.username ||
         proj.ownerId === currentUser.id ||
         proj.ownerId === String(currentUser.id)
     );
+
+    // Owner-only fields: lock if not owner
+    const ownerOnlyFields = ['et-title', 'et-desc', 'et-priority', 'et-due', 'et-assignee'];
+    ownerOnlyFields.forEach(fieldId => {
+        const el = document.getElementById(fieldId);
+        if (el) {
+            el.disabled = !iAmOwner;
+            el.style.opacity = iAmOwner ? '1' : '0.5';
+            el.style.cursor  = iAmOwner ? '' : 'not-allowed';
+        }
+    });
+
+    // Show/hide role notice
+    const notice = document.getElementById('et-role-notice');
+    if (notice) notice.style.display = iAmOwner ? 'none' : '';
+
+    // Show/hide delete button
     const deleteBtn = document.getElementById('et-delete-btn');
     if (deleteBtn) deleteBtn.style.display = iAmOwner ? '' : 'none';
 
@@ -516,6 +533,14 @@ async function openLog(taskId) {
 // ═══════════════════════════════════════════════
 function openModal(id) {
     document.getElementById(id).classList.remove('hidden');
+
+    // Set min date to today on all date inputs (prevents picking past dates in the browser UI)
+    const today = new Date().toISOString().split('T')[0];
+    ['nt-due', 'et-due'].forEach(fid => {
+        const el = document.getElementById(fid);
+        if (el) el.min = today;
+    });
+
     if (id === 'modal-task') {
         // Only show projects where the current user is the owner
         const myProjects = allProjects.filter(p =>

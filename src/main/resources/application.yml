@@ -13,8 +13,8 @@ spring:
   mail:
     host: smtp.gmail.com
     port: 465
-    username: @gmail.com        # ← your Gmail
-    password: ""    # ← 16-char App Password in quotes
+    username: piperoavi@gmail.com        # ← your Gmail
+    password: "rwat whus tsiw arjo"    # ← 16-char App Password in quotes
     properties:
       mail:
         smtp:
