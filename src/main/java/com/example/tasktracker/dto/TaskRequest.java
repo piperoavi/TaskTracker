@@ -5,30 +5,33 @@ import com.example.tasktracker.entity.TaskStatus;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
-import lombok.Getter;
-import lombok.Setter;
+import lombok.Data;
 
 import java.time.LocalDate;
 
-@Getter
-@Setter
+@Data
 public class TaskRequest {
 
-    @NotBlank(message = "Title is required")
-    @Size(min = 3, max = 100,
-            message = "Title must be between 3 and 100 characters")
+    @NotBlank
+    @Size(min = 3, max = 100)
     private String title;
 
     private String description;
 
-    @NotNull(message = "Status is required")
+    @NotNull
     private TaskStatus status;
 
-    @NotNull(message = "Priority is required")
+    @NotNull
     private TaskPriority priority;
 
     private LocalDate dueDate;
 
-    @NotNull(message = "Assignee id is required")
+    @NotNull
     private Long assigneeId;
+
+    // ── Who is making this request (the logged-in user) ──
+    // Used to verify project ownership before creating a task.
+    // Not saved to DB — only used for the ownership check.
+    @NotNull
+    private Long requesterId;
 }

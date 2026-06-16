@@ -34,6 +34,16 @@ public class TaskService {
         Project project = projectRepository.findById(projectId)
                 .orElseThrow(() -> new RuntimeException("Project not found"));
 
+        // ── OWNERSHIP CHECK ──────────────────────────────────────────
+        // Only the project owner can create tasks inside the project
+        if (!project.getOwner().getId().equals(request.getRequesterId())) {
+            throw new RuntimeException(
+                    "You are not the owner of project '" + project.getName() +
+                            "'. Only the project owner can create tasks."
+            );
+        }
+        // ─────────────────────────────────────────────────────────────
+
         User assignee = userRepository.findById(request.getAssigneeId())
                 .orElseThrow(() -> new RuntimeException("Assignee not found"));
 
@@ -51,7 +61,6 @@ public class TaskService {
 
         logActivity(savedTask, "TASK_CREATED", "Task was created");
 
-        // ← FIXED: null-safe due date, wrapped in try/catch
         try {
             emailService.sendTaskAssignedEmail(
                     assignee.getEmail(),
@@ -66,24 +75,34 @@ public class TaskService {
     }
 
     public TaskResponse getTaskById(Long id) {
-        Task task = findTaskEntityById(id);
-        return toTaskResponse(task);
+        return toTaskResponse(findTaskEntityById(id));
     }
 
     public Page<TaskResponse> getTasksByProject(Long projectId, TaskStatus status, Pageable pageable) {
-        Page<Task> tasks;
-
-        if (status != null) {
-            tasks = taskRepository.findByProjectIdAndStatus(projectId, status, pageable);
-        } else {
-            tasks = taskRepository.findByProjectId(projectId, pageable);
-        }
-
+        Page<Task> tasks = status != null
+                ? taskRepository.findByProjectIdAndStatus(projectId, status, pageable)
+                : taskRepository.findByProjectId(projectId, pageable);
         return tasks.map(this::toTaskResponse);
     }
 
     public TaskResponse updateTask(Long id, TaskRequest request) {
         Task task = findTaskEntityById(id);
+
+        // ── PERMISSION CHECK ─────────────────────────────────────────
+        // Only the project owner or the task assignee can update a task
+        Long ownerId    = task.getProject().getOwner().getId();
+        Long assigneeId = task.getAssignee() != null ? task.getAssignee().getId() : null;
+        Long requesterId = request.getRequesterId();
+
+        boolean isOwner    = ownerId.equals(requesterId);
+        boolean isAssignee = assigneeId != null && assigneeId.equals(requesterId);
+
+        if (!isOwner && !isAssignee) {
+            throw new RuntimeException(
+                    "Permission denied. Only the project owner or the task assignee can edit this task."
+            );
+        }
+        // ─────────────────────────────────────────────────────────────
 
         User assignee = userRepository.findById(request.getAssigneeId())
                 .orElseThrow(() -> new RuntimeException("Assignee not found"));
@@ -96,39 +115,39 @@ public class TaskService {
         task.setAssignee(assignee);
 
         Task updatedTask = taskRepository.save(task);
-
         logActivity(updatedTask, "TASK_UPDATED", "Task was updated");
-
         return toTaskResponse(updatedTask);
     }
 
-    public void deleteTask(Long id) {
+    public void deleteTask(Long id, Long requesterId) {
         Task task = findTaskEntityById(id);
 
-        logActivity(task, "TASK_DELETED", "Task was deleted");
+        // ── PERMISSION CHECK ─────────────────────────────────────────
+        // Only the project owner can delete a task
+        Long ownerId = task.getProject().getOwner().getId();
+        if (!ownerId.equals(requesterId)) {
+            throw new RuntimeException(
+                    "Permission denied. Only the project owner can delete tasks."
+            );
+        }
+        // ─────────────────────────────────────────────────────────────
 
+        // Log activity BEFORE deleting the task activities first,
+        // then delete the task (avoids TransientObjectException)
+        taskActivityRepository.deleteByTaskId(id);
         taskRepository.delete(task);
     }
 
     public List<TaskResponse> getTasksDueToday() {
-        return taskRepository.findTasksDueToday()
-                .stream()
-                .map(this::toTaskResponse)
-                .toList();
+        return taskRepository.findTasksDueToday().stream().map(this::toTaskResponse).toList();
     }
 
     public List<TaskResponse> getTasksAssignedToUser(Long userId) {
-        return taskRepository.findByAssigneeId(userId)
-                .stream()
-                .map(this::toTaskResponse)
-                .toList();
+        return taskRepository.findByAssigneeId(userId).stream().map(this::toTaskResponse).toList();
     }
 
     public List<TaskActivityResponse> getActivitiesByTask(Long taskId) {
-        return taskActivityRepository.findByTaskId(taskId)
-                .stream()
-                .map(this::toTaskActivityResponse)
-                .toList();
+        return taskActivityRepository.findByTaskId(taskId).stream().map(this::toTaskActivityResponse).toList();
     }
 
     private Task findTaskEntityById(Long id) {
@@ -142,7 +161,6 @@ public class TaskService {
         activity.setAction(action);
         activity.setDescription(description);
         activity.setCreatedAt(LocalDateTime.now());
-
         taskActivityRepository.save(activity);
     }
 

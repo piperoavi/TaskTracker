@@ -243,16 +243,37 @@ async function loadMyTasks() {
 function renderProjects() {
     const el = document.getElementById('projects-grid');
     if (!allProjects.length) { el.innerHTML = emptyState('No projects yet. Create one!'); return; }
-    el.innerHTML = allProjects.map(p => `
+    el.innerHTML = allProjects.map(p => {
+        const iAmOwner = p.ownerUsername === currentUser.username ||
+            p.ownerId === currentUser.id ||
+            p.ownerId === String(currentUser.id);
+        return `
     <div class="proj-card" onclick="goToProject(${p.id})">
       <div class="proj-dot"></div>
       <div class="proj-name">${esc(p.name)}</div>
       <div class="proj-desc">${esc(p.description||'No description.')}</div>
       <div class="proj-footer">
-        <span class="proj-owner">Owner: ${esc(p.ownerUsername||'—')}</span>
-        <button class="btn-sm-purple" onclick="event.stopPropagation();goToProject(${p.id})">View Tasks →</button>
+        <span class="proj-owner">${iAmOwner ? '<span class="owner-tag">You own this</span>' : 'Owner: ' + esc(p.ownerUsername||'—')}</span>
+        <div style="display:flex;gap:6px">
+          <button class="btn-sm-purple" onclick="event.stopPropagation();goToProject(${p.id})">View Tasks →</button>
+          ${iAmOwner
+            ? `<button class="btn-sm-danger" title="Delete project and all its tasks" onclick="event.stopPropagation();deleteProject(${p.id}, '${esc(p.name)}')">🗑</button>`
+            : ''
+        }
+        </div>
       </div>
-    </div>`).join('');
+    </div>`;
+    }).join('');
+}
+
+async function deleteProject(id, name) {
+    if (!confirm(`Delete project "${name}" and ALL its tasks? This cannot be undone.`)) return;
+    try {
+        await api(`/api/v1/projects/${id}`, { method: 'DELETE' });
+        toast('Project deleted.', 'success');
+        await loadAllProjects();
+        renderProjects();
+    } catch (e) { toast('Error: ' + e.message, 'error'); }
 }
 
 async function createProject() {
@@ -292,7 +313,15 @@ async function loadBrowseTasks() {
     const pid = document.getElementById('browse-project').value;
     const status = document.getElementById('browse-status').value;
     const el = document.getElementById('browse-container');
+
     if (!pid) { el.innerHTML = '<p class="muted-hint">Select a project to see its tasks.</p>'; return; }
+
+    // Show/hide "+ New Task" button based on whether current user owns this project
+    const proj = allProjects.find(p => String(p.id) === String(pid));
+    const iAmOwner = proj && (proj.ownerUsername === currentUser.username || proj.ownerId === currentUser.id || proj.ownerId === String(currentUser.id));
+    const browseBtn = document.getElementById('browse-new-task-btn');
+    if (browseBtn) browseBtn.style.display = iAmOwner ? '' : 'none';
+
     try {
         let url = `/api/v1/projects/${pid}/tasks?page=0&size=200`;
         if (status) url += `&status=${status}`;
@@ -319,7 +348,7 @@ async function createTask() {
     try {
         await api(`/api/v1/projects/${pid}/tasks`, {
             method: 'POST',
-            body: JSON.stringify({ title, description: desc, status, priority, dueDate: due||null, assigneeId: +assignee })
+            body: JSON.stringify({ title, description: desc, status, priority, dueDate: due||null, assigneeId: +assignee, requesterId: currentUser.id })
         });
         closeModal('modal-task');
         toast('Task created! Assignee will be notified by email.', 'success');
@@ -339,6 +368,16 @@ function openEdit(t) {
     sel.innerHTML = '<option value="">Select…</option>' +
         allUsers.map(u => `<option value="${u.id}" ${u.id===t.assigneeId?'selected':''}>${esc(u.username)}</option>`).join('');
 
+    // Only the project owner can delete — show/hide Delete button accordingly
+    const proj = allProjects.find(p => p.id === t.projectId);
+    const iAmOwner = proj && (
+        proj.ownerUsername === currentUser.username ||
+        proj.ownerId === currentUser.id ||
+        proj.ownerId === String(currentUser.id)
+    );
+    const deleteBtn = document.getElementById('et-delete-btn');
+    if (deleteBtn) deleteBtn.style.display = iAmOwner ? '' : 'none';
+
     openModal('modal-edit');
 }
 
@@ -356,7 +395,7 @@ async function updateTask() {
     try {
         await api(`/api/v1/tasks/${id}`, {
             method: 'PUT',
-            body: JSON.stringify({ title, description: desc, status, priority, dueDate: due||null, assigneeId: +assignee })
+            body: JSON.stringify({ title, description: desc, status, priority, dueDate: due||null, assigneeId: +assignee, requesterId: currentUser.id })
         });
         closeModal('modal-edit');
         toast('Task updated!', 'success');
@@ -368,7 +407,7 @@ async function deleteTask() {
     if (!confirm('Delete this task? This cannot be undone.')) return;
     const id = document.getElementById('et-id').value;
     try {
-        await api(`/api/v1/tasks/${id}`, { method: 'DELETE' });
+        await api(`/api/v1/tasks/${id}?requesterId=${currentUser.id}`, { method: 'DELETE' });
         closeModal('modal-edit');
         toast('Task deleted.', 'success');
         refreshCurrentPage();
@@ -388,28 +427,37 @@ function refreshCurrentPage() {
 // ═══════════════════════════════════════════════
 function renderTaskTable(tasks, el) {
     if (!tasks.length) { el.innerHTML = emptyState('No tasks found.'); return; }
+
+    const rows = tasks.map(t => {
+        const proj       = allProjects.find(p => p.id === t.projectId);
+        const isOwner    = proj && (proj.ownerUsername === currentUser.username || proj.ownerId === currentUser.id || proj.ownerId === String(currentUser.id));
+        const isAssignee = t.assigneeId === currentUser.id || t.assigneeUsername === currentUser.username;
+        const canEdit    = isOwner || isAssignee;
+        const taskJson   = JSON.stringify(t).replace(/'/g, "&#39;");
+
+        return `<tr>
+      <td>
+        <div class="task-title">${esc(t.title)}</div>
+        ${t.description ? `<div class="task-desc">${esc(t.description)}</div>` : ''}
+      </td>
+      <td><span class="badge badge-${t.status}">${fmtStatus(t.status)}</span></td>
+      <td><span class="badge badge-${t.priority}">${fmtPriority(t.priority)}</span></td>
+      <td class="cell-muted">${esc(t.assigneeUsername||'—')}</td>
+      <td class="cell-muted">${t.dueDate ? fmtDate(t.dueDate) : '—'}</td>
+      <td><div class="row-actions">
+        ${canEdit
+            ? `<button class="btn-icon" title="Edit task" onclick='openEdit(${taskJson})'>✏️</button>`
+            : '<span class="btn-icon-locked" title="Only the project owner or assignee can edit">🔒</span>'
+        }
+        <button class="btn-icon" title="Activity log" onclick="openLog(${t.id})">📋</button>
+      </div></td>
+    </tr>`;
+    }).join('');
+
     el.innerHTML = `<table class="task-table">
-    <thead><tr>
-      <th>Title</th><th>Status</th><th>Priority</th><th>Assignee</th><th>Due</th><th></th>
-    </tr></thead>
-    <tbody>${tasks.map(t => `
-      <tr>
-        <td>
-          <div class="task-title">${esc(t.title)}</div>
-          ${t.description ? `<div class="task-desc">${esc(t.description)}</div>` : ''}
-        </td>
-        <td><span class="badge badge-${t.status}">${fmtStatus(t.status)}</span></td>
-        <td><span class="badge badge-${t.priority}">${fmtPriority(t.priority)}</span></td>
-        <td class="cell-muted">${esc(t.assigneeUsername||'—')}</td>
-        <td class="cell-muted">${t.dueDate ? fmtDate(t.dueDate) : '—'}</td>
-        <td>
-          <div class="row-actions">
-            <button class="btn-icon" title="Edit" onclick='openEdit(${JSON.stringify(t)})'>✏️</button>
-            <button class="btn-icon" title="Activity log" onclick="openLog(${t.id})">📋</button>
-          </div>
-        </td>
-      </tr>`).join('')}
-    </tbody></table>`;
+    <thead><tr><th>Title</th><th>Status</th><th>Priority</th><th>Assignee</th><th>Due</th><th></th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
 }
 
 // ═══════════════════════════════════════════════
@@ -469,10 +517,16 @@ async function openLog(taskId) {
 function openModal(id) {
     document.getElementById(id).classList.remove('hidden');
     if (id === 'modal-task') {
-        // Fill project dropdown
+        // Only show projects where the current user is the owner
+        const myProjects = allProjects.filter(p =>
+            p.ownerId === currentUser.id ||
+            p.ownerId === String(currentUser.id) ||
+            p.ownerUsername === currentUser.username
+        );
         document.getElementById('nt-project').innerHTML =
-            '<option value="">Select a project…</option>' +
-            allProjects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('');
+            myProjects.length
+                ? '<option value="">Select a project…</option>' + myProjects.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join('')
+                : '<option value="">You have no projects yet — create one first</option>';
         // Fill assignee dropdown
         document.getElementById('nt-assignee').innerHTML =
             '<option value="">Select a person…</option>' +

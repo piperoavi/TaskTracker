@@ -208,7 +208,8 @@
                     <div class="page-eyebrow">Explore</div>
                     <h2>Browse Tasks</h2>
                 </div>
-                <button class="btn-primary" onclick="openModal('modal-task')">+ New Task</button>
+                <!-- Only visible when current user owns the selected project -->
+                <button id="browse-new-task-btn" class="btn-primary" style="display:none" onclick="openModal('modal-task')">+ New Task</button>
             </div>
             <div class="filter-bar">
                 <select id="browse-project" onchange="loadBrowseTasks()">
@@ -311,7 +312,7 @@
         <div class="field"><label>Assign To *</label><select id="et-assignee"><option value="">Select…</option></select></div>
         <div class="modal-ftr">
             <button class="btn-ghost" onclick="closeModal('modal-edit')">Cancel</button>
-            <button class="btn-danger" onclick="deleteTask()">Delete</button>
+            <button id="et-delete-btn" class="btn-danger" onclick="deleteTask()">Delete</button>
             <button class="btn-primary" onclick="updateTask()">Save Changes</button>
         </div>
     </div>
